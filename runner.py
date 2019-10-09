@@ -4,7 +4,6 @@
 #@Email     :1027867874@qq.com
 #@File      :runner.py
 #@Software  :PyCharm
-
 import unittest
 from test_case import login_sta
 from HTMLTestRunnerNew import HTMLTestRunner
