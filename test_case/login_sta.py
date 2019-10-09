@@ -5,7 +5,7 @@
 #@File      :login_sta.py
 #@Software  :PyCharm
 import unittest
-from selenium.webdriver import Firefox
+from selenium.webdriver import Chrome
 from ddt import ddt,data
 from page.home_oage import HomePage
 from page.login_page import LoginPage
@@ -26,7 +26,7 @@ class LoginTest(unittest.TestCase):
         print('开始执行用例')
 
         self.base_url='http://120.78.128.25:8765'
-        self.driver=Firefox()
+        self.driver=Chrome()
         self.driver.maximize_window()
         self.driver.get(self.base_url)
         self.po=LoginPage(self.driver)
