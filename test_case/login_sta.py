@@ -27,7 +27,7 @@ class LoginTest(unittest.TestCase):
         self.base_url='http://120.78.128.25:8765'
         self.option=ChromeOptions()
         self.option.binary_location=r'C:\Users\1\AppData\Local\Programs\Python\Python37\Scripts\chromedrive.exe'
-        self.driver=Chrome(options=self.option)
+        self.driver=Chrome()
         self.driver.maximize_window()
         self.driver.get(self.base_url)
         self.po=LoginPage(self.driver)
