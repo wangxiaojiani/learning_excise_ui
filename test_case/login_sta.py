@@ -5,7 +5,7 @@
 #@File      :login_sta.py
 #@Software  :PyCharm
 import unittest
-from selenium.webdriver import Chrome,ChromeOptions
+from selenium.webdriver import Firefox
 from ddt import ddt,data
 from page.home_oage import HomePage
 from page.login_page import LoginPage
@@ -24,10 +24,9 @@ class LoginTest(unittest.TestCase):
 
     def setUp(self):
         print('开始执行用例')
-        self.option=ChromeOptions()
-        self.option.binary_location=r'C:\Users\1\AppData\Local\Google\Chrome\Application\chromedriver'
+
         self.base_url='http://120.78.128.25:8765'
-        self.driver=Chrome()
+        self.driver=Firefox()
         self.driver.maximize_window()
         self.driver.get(self.base_url)
         self.po=LoginPage(self.driver)
