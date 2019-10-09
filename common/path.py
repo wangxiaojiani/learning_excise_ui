@@ -16,8 +16,7 @@ current_log_path=os.path.join(project_path,'result','log','test_log.text')
 
 #报告输出跟目录
 current_report_path=os.path.join(project_path,'result','report')
-#输出当前文件名称
-print(os.path.basename(__file__))
+
 
 
 
