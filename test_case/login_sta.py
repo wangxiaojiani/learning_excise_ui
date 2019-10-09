@@ -26,7 +26,7 @@ class LoginTest(unittest.TestCase):
         print('开始执行用例')
 
         self.base_url='http://120.78.128.25:8765'
-        self.driver=Chrome()
+        self.driver=Chrome(r'C:\Users\1\AppData\Local\Google\Chrome\Application\chromedriver.exe')
         self.driver.maximize_window()
         self.driver.get(self.base_url)
         self.po=LoginPage(self.driver)
