@@ -5,7 +5,7 @@
 #@File      :login_sta.py
 #@Software  :PyCharm
 import unittest,pytest
-from selenium.webdriver import Chrome
+from selenium.webdriver import Firefox
 from ddt import ddt,data
 from page.home_oage import HomePage
 from page.login_page import LoginPage

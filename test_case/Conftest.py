@@ -7,11 +7,11 @@
 import pytest
 from page.login_page import LoginPage
 from page.home_oage import HomePage
-from selenium.webdriver import Chrome
+from selenium.webdriver import Firefox
 @pytest.fixture(scope='class')
 def init_driver():
     print('开始执行login类用例')
-    driver=Chrome()
+    driver=Firefox()
     driver.maximize_window()
     po=LoginPage(driver)
     h_po=HomePage(driver)
