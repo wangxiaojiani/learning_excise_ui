@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>test.html</h1>
+    <p>Report generated on 10-Oct-2019 at 02:05:24 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v1.20.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk1.8.0_181</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;4.5.0&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.11.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.17134-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;7.0&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.20.0&apos;, &apos;allure-pytest&apos;: &apos;2.6.3&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>9 tests ran in 984.62 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">5 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">4 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">9 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case0]</td>
+          <td class="col-duration">84.31</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB04C4E0&gt;<br/>case = {&#x27;account&#x27;: &#x27;&#x27;, &#x27;expect_result&#x27;: &#x27;请输入手机号&#x27;, &#x27;pwd&#x27;: &#x27;123213&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>        init_driver[0].get(self.base_url)<br/>        init_driver[1].login(case[&#x27;account&#x27;],case[&#x27;pwd&#x27;])<br/>&gt;       assert init_driver[1].pwd_error_hint()==case[&#x27;expect_result&#x27;]<br/><br/>test_case\login_sta_test.py:60: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>page\login_page.py:47: in pwd_error_hint<br/>    return self.find_element (self.pwd_error_pm).text<br/>common\base.py:93: in find_element<br/>    self.wait_eleVisible(locator,by,wait_times)<br/>common\base.py:57: in wait_eleVisible<br/>    raise e<br/>common\base.py:51: in wait_eleVisible<br/>    WebDriverWait (self.driver, wait_times).until (EC.visibility_of_element_located((by, locator)))<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;<br/>method = &lt;selenium.webdriver.support.expected_conditions.visibility_of_element_located object at 0x00000271FB04CE48&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message=&#x27;&#x27;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value is not False.&quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.time() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.time() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\wait.py:80: TimeoutException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643457.402766，等待结束时间:1570643457.476723，等待时间长0.07395696640014648
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.0703502，等待结束时间:1570643458.104329，等待时间长0.033978939056396484
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.1073277，等待结束时间:1570643458.1253152，等待时间长0.017987489700317383
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.188276，等待结束时间:1570643458.2242556，等待时间长0.035979509353637695
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.3161979，等待结束时间:1570643458.353175，等待时间长0.03697705268859863
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-51-59_374162167.png------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643546.5616016，等待结束时间:1570643546.63656，等待时间长0.07495832443237305
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643547.2911544，等待结束时间:1570643547.3561141，等待时间长0.06495976448059082
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643547.3631086，等待结束时间:1570643547.4040847，等待时间长0.04097604751586914
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643547.5300014，等待结束时间:1570643547.5809698，等待时间长0.05096840858459473
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643547.658921，等待结束时间:1570643547.689903，等待时间长0.030982017517089844
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-53-28_187663443.png------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643635.9313214，等待结束时间:1570643636.0102668，等待时间长0.07894539833068848
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643636.6778555，等待结束时间:1570643636.74881，等待时间长0.07095456123352051
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643636.7558055，等待结束时间:1570643636.7967799，等待时间长0.04097437858581543
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643636.939692，等待结束时间:1570643636.9826655，等待时间长0.04297351837158203
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643637.090604，等待结束时间:1570643637.1335714，等待时间长0.04296731948852539
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-54-58_221353624.png</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case1]</td>
+          <td class="col-duration">84.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB95DE48&gt;<br/>case = {&#x27;account&#x27;: &#x27;1234&#x27;, &#x27;expect_result&#x27;: &#x27;请输入正确的手机号&#x27;, &#x27;pwd&#x27;: &#x27;32424&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>        init_driver[0].get(self.base_url)<br/>        init_driver[1].login(case[&#x27;account&#x27;],case[&#x27;pwd&#x27;])<br/>&gt;       assert init_driver[1].pwd_error_hint()==case[&#x27;expect_result&#x27;]<br/><br/>test_case\login_sta_test.py:60: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>page\login_page.py:47: in pwd_error_hint<br/>    return self.find_element (self.pwd_error_pm).text<br/>common\base.py:93: in find_element<br/>    self.wait_eleVisible(locator,by,wait_times)<br/>common\base.py:57: in wait_eleVisible<br/>    raise e<br/>common\base.py:51: in wait_eleVisible<br/>    WebDriverWait (self.driver, wait_times).until (EC.visibility_of_element_located((by, locator)))<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;<br/>method = &lt;selenium.webdriver.support.expected_conditions.visibility_of_element_located object at 0x00000271FB95D518&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message=&#x27;&#x27;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value is not False.&quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.time() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.time() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\wait.py:80: TimeoutException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643720.1533744，等待结束时间:1570643720.233324，等待时间长0.07994961738586426
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643720.908907，等待结束时间:1570643720.9748657，等待时间长0.06595873832702637
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643720.9818604，等待结束时间:1570643721.0198426，等待时间长0.03798222541809082
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643721.1877334，等待结束时间:1570643721.216715，等待时间长0.028981685638427734
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643721.2966666，等待结束时间:1570643721.3326433，等待时间长0.03597664833068848
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-56-22_122496439.png------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643809.6689768，等待结束时间:1570643809.7459273，等待时间长0.0769505500793457
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643810.3585465，等待结束时间:1570643810.3915274，等待时间长0.032980918884277344
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643810.3965237，等待结束时间:1570643810.4155118，等待时间长0.01898813247680664
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643810.487466，等待结束时间:1570643810.5184479，等待时间长0.030981779098510742
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643810.5963995，等待结束时间:1570643810.6323771，等待时间长0.03597760200500488
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-57-51_123420932.png------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643898.814896，等待结束时间:1570643898.8588696，等待时间长0.043973445892333984
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643899.4804819，等待结束时间:1570643899.5084662，等待时间长0.0279843807220459
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643899.5114625，等待结束时间:1570643899.5294514，等待时间长0.017988920211791992
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643899.6123998，等待结束时间:1570643899.6453805，等待时间长0.03298068046569824
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643899.7243316，等待结束时间:1570643899.75831，等待时间长0.03397846221923828
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-59-20_590547256.png</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case2]</td>
+          <td class="col-duration">103.56</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB103C18&gt;<br/>case = {&#x27;account&#x27;: &#x27;13296662567&#x27;, &#x27;expect_result&#x27;: &#x27;请输入密码&#x27;, &#x27;pwd&#x27;: &#x27;&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>        init_driver[0].get(self.base_url)<br/>        init_driver[1].login(case[&#x27;account&#x27;],case[&#x27;pwd&#x27;])<br/>&gt;       assert init_driver[1].pwd_error_hint()==case[&#x27;expect_result&#x27;]<br/><br/>test_case\login_sta_test.py:60: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>page\login_page.py:47: in pwd_error_hint<br/>    return self.find_element (self.pwd_error_pm).text<br/>common\base.py:93: in find_element<br/>    self.wait_eleVisible(locator,by,wait_times)<br/>common\base.py:57: in wait_eleVisible<br/>    raise e<br/>common\base.py:51: in wait_eleVisible<br/>    WebDriverWait (self.driver, wait_times).until (EC.visibility_of_element_located((by, locator)))<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;<br/>method = &lt;selenium.webdriver.support.expected_conditions.visibility_of_element_located object at 0x00000271FB103780&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message=&#x27;&#x27;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value is not False.&quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.time() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.time() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\wait.py:80: TimeoutException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643982.8890188，等待结束时间:1570643982.96098，等待时间长0.0719611644744873
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643983.6335597，等待结束时间:1570643983.705519，等待时间长0.07195925712585449
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643983.7115154，等待结束时间:1570643983.749492，等待时间长0.03797650337219238
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643983.9473677，等待结束时间:1570643983.974346，等待时间长0.026978254318237305
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643984.0293126，等待结束时间:1570643984.058295，等待时间长0.02898240089416504
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 02-00-45_544366746.png------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644072.3217793，等待结束时间:1570644072.405729，等待时间长0.08394980430603027
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644072.9423895，等待结束时间:1570644072.9723713，等待时间长0.02998185157775879
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644072.975369，等待结束时间:1570644072.9933581，等待时间长0.017989158630371094
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644073.0903006，等待结束时间:1570644073.1172824，等待时间长0.026981830596923828
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644073.1792438，等待结束时间:1570644073.2102249，等待时间长0.030981063842773438
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 02-02-14_870261770.png------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644161.549561，等待结束时间:1570644161.623515，等待时间长0.07395386695861816
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644181.3832846，等待结束时间:1570644181.453245，等待时间长0.06996035575866699
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644181.4602406，等待结束时间:1570644181.500211，等待时间长0.03997039794921875
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644181.6990864，等待结束时间:1570644181.7300677，等待时间长0.03098130226135254
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644181.7880316，等待结束时间:1570644181.8180132，等待时间长0.029981613159179688
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 02-04-02_868744840.png</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case3]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB99FF28&gt;<br/>case = {&#x27;account&#x27;: &#x27;&#x27;, &#x27;expect_result&#x27;: &#x27;请输入手机号&#x27;, &#x27;pwd&#x27;: &#x27;&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>&gt;       init_driver[0].get(self.base_url)<br/><br/>test_case\login_sta_test.py:58: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:333: in get<br/>    self.execute(Command.GET, {&#x27;url&#x27;: url})<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:321: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x00000271FA44DB70&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;0b10482dbd6b3dc4af53fea7b26c4715&#x27;, &#x27;status&#x27;: 23, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such window: target window al...ver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 10.0.17134 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>        Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchWindowException: Message: no such window: target window already closed</span><br/><span class="error">E       from unknown error: web view not found</span><br/><span class="error">E         (Session info: chrome=73.0.3683.86)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 10.0.17134 x86_64)</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchWindowException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case0]</td>
+          <td class="col-duration">83.96</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB053D30&gt;<br/>case = {&#x27;account&#x27;: &#x27;&#x27;, &#x27;expect_result&#x27;: &#x27;请输入手机号&#x27;, &#x27;pwd&#x27;: &#x27;123213&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>        init_driver[0].get(self.base_url)<br/>        init_driver[1].login(case[&#x27;account&#x27;],case[&#x27;pwd&#x27;])<br/>&gt;       assert init_driver[1].pwd_error_hint()==case[&#x27;expect_result&#x27;]<br/><br/>test_case\login_sta_test.py:60: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>page\login_page.py:47: in pwd_error_hint<br/>    return self.find_element (self.pwd_error_pm).text<br/>common\base.py:93: in find_element<br/>    self.wait_eleVisible(locator,by,wait_times)<br/>common\base.py:57: in wait_eleVisible<br/>    raise e<br/>common\base.py:51: in wait_eleVisible<br/>    WebDriverWait (self.driver, wait_times).until (EC.visibility_of_element_located((by, locator)))<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;<br/>method = &lt;selenium.webdriver.support.expected_conditions.visibility_of_element_located object at 0x00000271FB04CB00&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message=&#x27;&#x27;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value is not False.&quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.time() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.time() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\wait.py:80: TimeoutException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643457.402766，等待结束时间:1570643457.476723，等待时间长0.07395696640014648
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.0703502，等待结束时间:1570643458.104329，等待时间长0.033978939056396484
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.1073277，等待结束时间:1570643458.1253152，等待时间长0.017987489700317383
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.188276，等待结束时间:1570643458.2242556，等待时间长0.035979509353637695
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.3161979，等待结束时间:1570643458.353175，等待时间长0.03697705268859863
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-51-59_374162167.png</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case0]</td>
+          <td class="col-duration">84.31</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB92D780&gt;<br/>case = {&#x27;account&#x27;: &#x27;&#x27;, &#x27;expect_result&#x27;: &#x27;请输入手机号&#x27;, &#x27;pwd&#x27;: &#x27;123213&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>        init_driver[0].get(self.base_url)<br/>        init_driver[1].login(case[&#x27;account&#x27;],case[&#x27;pwd&#x27;])<br/>&gt;       assert init_driver[1].pwd_error_hint()==case[&#x27;expect_result&#x27;]<br/><br/>test_case\login_sta_test.py:60: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>page\login_page.py:47: in pwd_error_hint<br/>    return self.find_element (self.pwd_error_pm).text<br/>common\base.py:93: in find_element<br/>    self.wait_eleVisible(locator,by,wait_times)<br/>common\base.py:57: in wait_eleVisible<br/>    raise e<br/>common\base.py:51: in wait_eleVisible<br/>    WebDriverWait (self.driver, wait_times).until (EC.visibility_of_element_located((by, locator)))<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;<br/>method = &lt;selenium.webdriver.support.expected_conditions.visibility_of_element_located object at 0x00000271FB92DE80&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message=&#x27;&#x27;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value is not False.&quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.time() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.time() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\wait.py:80: TimeoutException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643457.402766，等待结束时间:1570643457.476723，等待时间长0.07395696640014648
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.0703502，等待结束时间:1570643458.104329，等待时间长0.033978939056396484
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.1073277，等待结束时间:1570643458.1253152，等待时间长0.017987489700317383
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.188276，等待结束时间:1570643458.2242556，等待时间长0.035979509353637695
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643458.3161979，等待结束时间:1570643458.353175，等待时间长0.03697705268859863
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-51-59_374162167.png------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643546.5616016，等待结束时间:1570643546.63656，等待时间长0.07495832443237305
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643547.2911544，等待结束时间:1570643547.3561141，等待时间长0.06495976448059082
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643547.3631086，等待结束时间:1570643547.4040847，等待时间长0.04097604751586914
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643547.5300014，等待结束时间:1570643547.5809698，等待时间长0.05096840858459473
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643547.658921，等待结束时间:1570643547.689903，等待时间长0.030982017517089844
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-53-28_187663443.png</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case1]</td>
+          <td class="col-duration">84.33</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB91A390&gt;<br/>case = {&#x27;account&#x27;: &#x27;1234&#x27;, &#x27;expect_result&#x27;: &#x27;请输入正确的手机号&#x27;, &#x27;pwd&#x27;: &#x27;32424&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>        init_driver[0].get(self.base_url)<br/>        init_driver[1].login(case[&#x27;account&#x27;],case[&#x27;pwd&#x27;])<br/>&gt;       assert init_driver[1].pwd_error_hint()==case[&#x27;expect_result&#x27;]<br/><br/>test_case\login_sta_test.py:60: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>page\login_page.py:47: in pwd_error_hint<br/>    return self.find_element (self.pwd_error_pm).text<br/>common\base.py:93: in find_element<br/>    self.wait_eleVisible(locator,by,wait_times)<br/>common\base.py:57: in wait_eleVisible<br/>    raise e<br/>common\base.py:51: in wait_eleVisible<br/>    WebDriverWait (self.driver, wait_times).until (EC.visibility_of_element_located((by, locator)))<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;<br/>method = &lt;selenium.webdriver.support.expected_conditions.visibility_of_element_located object at 0x00000271FB91A320&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message=&#x27;&#x27;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value is not False.&quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.time() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.time() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\wait.py:80: TimeoutException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643720.1533744，等待结束时间:1570643720.233324，等待时间长0.07994961738586426
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643720.908907，等待结束时间:1570643720.9748657，等待时间长0.06595873832702637
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643720.9818604，等待结束时间:1570643721.0198426，等待时间长0.03798222541809082
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643721.1877334，等待结束时间:1570643721.216715，等待时间长0.028981685638427734
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643721.2966666，等待结束时间:1570643721.3326433，等待时间长0.03597664833068848
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-56-22_122496439.png</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case1]</td>
+          <td class="col-duration">84.19</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB938940&gt;<br/>case = {&#x27;account&#x27;: &#x27;1234&#x27;, &#x27;expect_result&#x27;: &#x27;请输入正确的手机号&#x27;, &#x27;pwd&#x27;: &#x27;32424&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>        init_driver[0].get(self.base_url)<br/>        init_driver[1].login(case[&#x27;account&#x27;],case[&#x27;pwd&#x27;])<br/>&gt;       assert init_driver[1].pwd_error_hint()==case[&#x27;expect_result&#x27;]<br/><br/>test_case\login_sta_test.py:60: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>page\login_page.py:47: in pwd_error_hint<br/>    return self.find_element (self.pwd_error_pm).text<br/>common\base.py:93: in find_element<br/>    self.wait_eleVisible(locator,by,wait_times)<br/>common\base.py:57: in wait_eleVisible<br/>    raise e<br/>common\base.py:51: in wait_eleVisible<br/>    WebDriverWait (self.driver, wait_times).until (EC.visibility_of_element_located((by, locator)))<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;<br/>method = &lt;selenium.webdriver.support.expected_conditions.visibility_of_element_located object at 0x00000271FB938B38&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message=&#x27;&#x27;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value is not False.&quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.time() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.time() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\wait.py:80: TimeoutException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643720.1533744，等待结束时间:1570643720.233324，等待时间长0.07994961738586426
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643720.908907，等待结束时间:1570643720.9748657，等待时间长0.06595873832702637
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643720.9818604，等待结束时间:1570643721.0198426，等待时间长0.03798222541809082
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643721.1877334，等待结束时间:1570643721.216715，等待时间长0.028981685638427734
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643721.2966666，等待结束时间:1570643721.3326433，等待时间长0.03597664833068848
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-56-22_122496439.png------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643809.6689768，等待结束时间:1570643809.7459273，等待时间长0.0769505500793457
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643810.3585465，等待结束时间:1570643810.3915274，等待时间长0.032980918884277344
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643810.3965237，等待结束时间:1570643810.4155118，等待时间长0.01898813247680664
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643810.487466，等待结束时间:1570643810.5184479，等待时间长0.030981779098510742
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643810.5963995，等待结束时间:1570643810.6323771，等待时间长0.03597760200500488
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 01-57-51_123420932.png</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case2]</td>
+          <td class="col-duration">84.31</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB96A198&gt;<br/>case = {&#x27;account&#x27;: &#x27;13296662567&#x27;, &#x27;expect_result&#x27;: &#x27;请输入密码&#x27;, &#x27;pwd&#x27;: &#x27;&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>        init_driver[0].get(self.base_url)<br/>        init_driver[1].login(case[&#x27;account&#x27;],case[&#x27;pwd&#x27;])<br/>&gt;       assert init_driver[1].pwd_error_hint()==case[&#x27;expect_result&#x27;]<br/><br/>test_case\login_sta_test.py:60: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>page\login_page.py:47: in pwd_error_hint<br/>    return self.find_element (self.pwd_error_pm).text<br/>common\base.py:93: in find_element<br/>    self.wait_eleVisible(locator,by,wait_times)<br/>common\base.py:57: in wait_eleVisible<br/>    raise e<br/>common\base.py:51: in wait_eleVisible<br/>    WebDriverWait (self.driver, wait_times).until (EC.visibility_of_element_located((by, locator)))<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;<br/>method = &lt;selenium.webdriver.support.expected_conditions.visibility_of_element_located object at 0x00000271FB96A668&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message=&#x27;&#x27;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value is not False.&quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.time() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.time() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\wait.py:80: TimeoutException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643982.8890188，等待结束时间:1570643982.96098，等待时间长0.0719611644744873
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643983.6335597，等待结束时间:1570643983.705519，等待时间长0.07195925712585449
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643983.7115154，等待结束时间:1570643983.749492，等待时间长0.03797650337219238
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643983.9473677，等待结束时间:1570643983.974346，等待时间长0.026978254318237305
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643984.0293126，等待结束时间:1570643984.058295，等待时间长0.02898240089416504
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 02-00-45_544366746.png</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case2]</td>
+          <td class="col-duration">84.21</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB95D278&gt;<br/>case = {&#x27;account&#x27;: &#x27;13296662567&#x27;, &#x27;expect_result&#x27;: &#x27;请输入密码&#x27;, &#x27;pwd&#x27;: &#x27;&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>        init_driver[0].get(self.base_url)<br/>        init_driver[1].login(case[&#x27;account&#x27;],case[&#x27;pwd&#x27;])<br/>&gt;       assert init_driver[1].pwd_error_hint()==case[&#x27;expect_result&#x27;]<br/><br/>test_case\login_sta_test.py:60: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>page\login_page.py:47: in pwd_error_hint<br/>    return self.find_element (self.pwd_error_pm).text<br/>common\base.py:93: in find_element<br/>    self.wait_eleVisible(locator,by,wait_times)<br/>common\base.py:57: in wait_eleVisible<br/>    raise e<br/>common\base.py:51: in wait_eleVisible<br/>    WebDriverWait (self.driver, wait_times).until (EC.visibility_of_element_located((by, locator)))<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;<br/>method = &lt;selenium.webdriver.support.expected_conditions.visibility_of_element_located object at 0x00000271FB95D9B0&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message=&#x27;&#x27;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value is not False.&quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.time() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.time() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\wait.py:80: TimeoutException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643982.8890188，等待结束时间:1570643982.96098，等待时间长0.0719611644744873
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643983.6335597，等待结束时间:1570643983.705519，等待时间长0.07195925712585449
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643983.7115154，等待结束时间:1570643983.749492，等待时间长0.03797650337219238
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643983.9473677，等待结束时间:1570643983.974346，等待时间长0.026978254318237305
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643984.0293126，等待结束时间:1570643984.058295，等待时间长0.02898240089416504
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 02-00-45_544366746.png------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644072.3217793，等待结束时间:1570644072.405729，等待时间长0.08394980430603027
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644072.9423895，等待结束时间:1570644072.9723713，等待时间长0.02998185157775879
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644072.975369，等待结束时间:1570644072.9933581，等待时间长0.017989158630371094
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644073.0903006，等待结束时间:1570644073.1172824，等待时间长0.026981830596923828
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644073.1792438，等待结束时间:1570644073.2102249，等待时间长0.030981063842773438
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;layui-layer-content&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+ERROR    WJ:mylog.py:43 等待元素超时，截取当前页面
+INFO     WJ:mylog.py:39 当前截图文件路径为E:\untitled_test\learning_excise_ui\img\19-10-10 02-02-14_870261770.png</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case3]</td>
+          <td class="col-duration">11.29</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB9837F0&gt;<br/>case = {&#x27;account&#x27;: &#x27;&#x27;, &#x27;expect_result&#x27;: &#x27;请输入手机号&#x27;, &#x27;pwd&#x27;: &#x27;&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>        init_driver[0].get(self.base_url)<br/>&gt;       init_driver[1].login(case[&#x27;account&#x27;],case[&#x27;pwd&#x27;])<br/><br/>test_case\login_sta_test.py:59: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>page\login_page.py:52: in login<br/>    self.p_home.click_login_button()<br/>page\home_oage.py:15: in click_login_button<br/>    self.find_element(self.login_button).click()<br/>common\base.py:93: in find_element<br/>    self.wait_eleVisible(locator,by,wait_times)<br/>common\base.py:51: in wait_eleVisible<br/>    WebDriverWait (self.driver, wait_times).until (EC.visibility_of_element_located((by, locator)))<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\wait.py:71: in until<br/>    value = method(self._driver)<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\expected_conditions.py:128: in __call__<br/>    return _element_if_visible(_find_element(driver, self.locator))<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\expected_conditions.py:415: in _find_element<br/>    raise e<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\expected_conditions.py:411: in _find_element<br/>    return driver.find_element(*by)<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:978: in find_element<br/>    &#x27;value&#x27;: value})[&#x27;value&#x27;]<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:321: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x00000271FA44DB70&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;0b10482dbd6b3dc4af53fea7b26c4715&#x27;, &#x27;status&#x27;: 23, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such window: target window al...ver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 10.0.17134 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>        Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchWindowException: Message: no such window: target window already closed</span><br/><span class="error">E       from unknown error: web view not found</span><br/><span class="error">E         (Session info: chrome=73.0.3683.86)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 10.0.17134 x86_64)</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchWindowException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_empty_error[case3]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FB9A3EB8&gt;<br/>case = {&#x27;account&#x27;: &#x27;&#x27;, &#x27;expect_result&#x27;: &#x27;请输入手机号&#x27;, &#x27;pwd&#x27;: &#x27;&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.st<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_info_error)<br/>    def test_login_empty_error(self,case,init_driver):<br/>        &#x27;登录错误用例&#x27;<br/>&gt;       init_driver[0].get(self.base_url)<br/><br/>test_case\login_sta_test.py:58: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:333: in get<br/>    self.execute(Command.GET, {&#x27;url&#x27;: url})<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:321: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x00000271FA44DB70&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;0b10482dbd6b3dc4af53fea7b26c4715&#x27;, &#x27;status&#x27;: 23, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such window: target window al...ver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 10.0.17134 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>        Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchWindowException: Message: no such window: target window already closed</span><br/><span class="error">E       from unknown error: web view not found</span><br/><span class="error">E         (Session info: chrome=73.0.3683.86)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 10.0.17134 x86_64)</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchWindowException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_loginsuccess[case0]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_case.login_sta_test.TestLogin object at 0x00000271FBA26048&gt;<br/>case = {&#x27;account&#x27;: &#x27;18684720553&#x27;, &#x27;expect_result&#x27;: &#x27;我的帐户&#x27;, &#x27;pwd&#x27;: &#x27;python&#x27;}<br/>init_driver = (&lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;0b10482dbd6b3dc4af53fea7b26c4715&quot;)&gt;, &lt;page.login_page.LoginPage object at 0x00000271FB040C50&gt;, &lt;page.home_oage.HomePage object at 0x00000271FB050E10&gt;)<br/><br/>    @pytest.mark.sa<br/>    @pytest.mark.parametrize(&#x27;case&#x27;,login_data.login_success_info)<br/>    # @data(*login_data.login_success_info)<br/>    def test_loginsuccess(self,case,init_driver):<br/>&gt;       init_driver[0].get(self.base_url)<br/><br/>test_case\login_sta_test.py:66: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:333: in get<br/>    self.execute(Command.GET, {&#x27;url&#x27;: url})<br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:321: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x00000271FA44DB70&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;0b10482dbd6b3dc4af53fea7b26c4715&#x27;, &#x27;status&#x27;: 23, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such window: target window al...ver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 10.0.17134 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>        Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchWindowException: Message: no such window: target window already closed</span><br/><span class="error">E       from unknown error: web view not found</span><br/><span class="error">E         (Session info: chrome=73.0.3683.86)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 10.0.17134 x86_64)</span><br/><br/>C:\Users\1\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchWindowException<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_error[case0]</td>
+          <td class="col-duration">23.27</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643366.5939548，等待结束时间:1570643366.640924，等待时间长0.04696917533874512
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643367.2985184，等待结束时间:1570643367.3574808，等待时间长0.058962345123291016
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643367.3614817，等待结束时间:1570643367.3904603，等待时间长0.028978586196899414
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643367.4574223，等待结束时间:1570643367.5083864，等待时间长0.0509641170501709
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643367.5963323，等待结束时间:1570643367.6313162，等待时间长0.03498387336730957
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;form-error-info&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643367.7072632，等待结束时间:1570643367.7432418，等待时间长0.03597855567932129</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_error[case1]</td>
+          <td class="col-duration">22.62</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643389.2609472，等待结束时间:1570643389.3608847，等待时间长0.09993743896484375
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643389.9835002，等待结束时间:1570643390.0144796，等待时间长0.030979394912719727
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643390.01748，等待结束时间:1570643390.0364683，等待时间长0.018988370895385742
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643390.1064231，等待结束时间:1570643390.136403，等待时间长0.029979944229125977
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643390.216356，等待结束时间:1570643390.2493358，等待时间长0.032979726791381836
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;form-error-info&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643390.326287，等待结束时间:1570643390.3582683，等待时间长0.03198122978210449</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_error[case2]</td>
+          <td class="col-duration">22.86</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643411.9808826，等待结束时间:1570643412.055841，等待时间长0.07495832443237305
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643412.7034388，等待结束时间:1570643412.7753901，等待时间长0.07195138931274414
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643412.7823853，等待结束时间:1570643412.8173647，等待时间长0.03497934341430664
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643413.0002508，等待结束时间:1570643413.0372279，等待时间长0.03697705268859863
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643413.0971906，等待结束时间:1570643413.1291711，等待时间长0.03198051452636719
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;form-error-info&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643413.200127，等待结束时间:1570643413.231113，等待时间长0.03098607063293457</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_login_error[case3]</td>
+          <td class="col-duration">22.69</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643434.8007538，等待结束时间:1570643434.8477273，等待时间长0.046973466873168945
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643435.4013853，等待结束时间:1570643435.473344，等待时间长0.07195878028869629
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643435.480339，等待结束时间:1570643435.5313077，等待时间长0.05096864700317383
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643435.671216，等待结束时间:1570643435.7131896，等待时间长0.04197359085083008
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643435.7651575，等待结束时间:1570643435.8021357，等待时间长0.03697824478149414
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://div[@class=&#x27;form-error-info&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570643435.882085，等待结束时间:1570643435.9190638，等待时间长0.036978721618652344</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_case/login_sta_test.py::TestLogin::test_loginsuccess[case0]</td>
+          <td class="col-duration">45.66</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://a[text()=&#x27;登录&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644298.817246，等待结束时间:1570644298.8951936，等待时间长0.07794761657714844
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644299.8426063，等待结束时间:1570644299.8725886，等待时间长0.029982328414916992
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;phone&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644299.8755877，等待结束时间:1570644299.8935745，等待时间长0.017986774444580078
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://input[@name=&#x27;password&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644299.9885154，等待结束时间:1570644300.0274923，等待时间长0.03897690773010254
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://button[@class=&#x27;btn btn-special&#x27;]
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644300.1114402，等待结束时间:1570644300.1434205，等待时间长0.031980276107788086
+INFO     WJ:mylog.py:39 当前元素风味的类型为xpath，当前查找元素的表达式为://img[@class=&#x27;mr-5&#x27;]/parent::a
+INFO     WJ:mylog.py:39 开始等待元素在页面可见
+INFO     WJ:mylog.py:39 等待结束，等待开始时间:1570644300.213379，等待结束时间:1570644322.3337085，等待时间长22.12032961845398</div></td></tr></tbody></table></body></html>
